@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import io from 'socket.io-client';
-import streamSaver from 'streamsaver';
+
 
 const STUN_SERVERS = {
     iceServers: [
@@ -145,6 +145,7 @@ export function useWebRTC(roomId, name) {
     };
 
     const setupDataChannel = (dc, remotePeerId) => {
+        dc.binaryType = 'arraybuffer'; // Handle as ArrayBuffer explicitly
         dataChannelsRef.current[remotePeerId] = dc;
         dc.onopen = () => console.log(`Data Channel Open with ${remotePeerId}`);
         dc.onmessage = (e) => handleDataMessage(e, remotePeerId);
@@ -155,15 +156,9 @@ export function useWebRTC(roomId, name) {
         if (typeof data === 'string') {
             const metadata = JSON.parse(data);
             if (metadata.type === 'start') {
-                // Init StreamSaver
-                const fileStream = streamSaver.createWriteStream(metadata.fileName, {
-                    size: metadata.size
-                });
-                const writer = fileStream.getWriter();
-
                 filesRef.current[metadata.fileId] = {
                     metadata,
-                    writer,
+                    chunks: [],
                     received: 0
                 };
                 updateTransfer(metadata.fileId, {
@@ -173,28 +168,45 @@ export function useWebRTC(roomId, name) {
                     progress: 0
                 });
             } else if (metadata.type === 'end') {
-                // Close stream
+                // Reassemble
                 const fileData = filesRef.current[metadata.fileId];
-                if (fileData && fileData.writer) {
-                    fileData.writer.close();
-                    updateTransfer(metadata.fileId, { progress: 100, status: 'Completed' });
-                    delete filesRef.current[metadata.fileId];
+                if (fileData) {
+                    console.log('File Transfer Complete. Reassembling...', {
+                        fileId: metadata.fileId,
+                        chunksCount: fileData.chunks.length,
+                        totalReceived: fileData.received,
+                        expectedSize: fileData.metadata.size,
+                        mimeType: fileData.metadata.fileType
+                    });
+
+                    const blob = new Blob(fileData.chunks, { type: fileData.metadata.fileType || 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+
+                    console.log('Blob created:', { size: blob.size, url });
+
+                    updateTransfer(metadata.fileId, { progress: 100, url, status: 'Completed' });
+                    delete filesRef.current[metadata.fileId]; // Keep metadata/url in transfers state, remove buffer
+                } else {
+                    console.warn('Received END for unknown file:', metadata.fileId);
                 }
             }
         } else {
             // Chunk
-            const activeFileId = Object.keys(filesRef.current).find(id => filesRef.current[id].writer); // Find active stream
+            const activeFileId = Object.keys(filesRef.current).find(id => filesRef.current[id].chunks);
 
             if (activeFileId) {
                 const fileInfo = filesRef.current[activeFileId];
-                // Write to stream
-                fileInfo.writer.write(new Uint8Array(data));
+                fileInfo.chunks.push(data);
 
-                fileInfo.received += data.byteLength;
+                const chunkSize = data.byteLength || data.size || 0;
+                fileInfo.received += chunkSize;
+
+                // console.log(`Received chunk for ${activeFileId}: ${chunkSize} bytes. Total: ${fileInfo.received}/${fileInfo.metadata.size}`);
+
                 const progress = Math.round((fileInfo.received / fileInfo.metadata.size) * 100);
                 updateTransfer(activeFileId, { progress });
-
-                // No auto-close here, wait for 'end' message for precision
+            } else {
+                console.warn('Received BINARY chunk but no active file transfer found.', data);
             }
         }
     };
