@@ -26,90 +26,77 @@ export function useWebRTC(roomId, name) {
 
     useEffect(() => {
         // Initialize Socket
-        socketRef.current = io('/', {
-            transports: ['websocket'], // Force websocket
-            path: '/socket.io' // Proxy will handle this if setup in dev info
-            // In Docker, client is served by Nginx on p 80, Proxying /socket.io to server:3000?
-            // Wait, I forgot to configure Nginx proxy!! 
-        // In Docker, client is served by Nginx on p 80, Proxying /socket.io to server:3000?
-        // Wait, I forgot to configure Nginx proxy!! 
-        // The current Nginx conf in Client only serves static files and 404s.
-        // Need to fix Nginx or let Client connect to :3000 directly.
-        // Connecting directly to :3000 requires port exposure and CORS (which I enabled).
-        // Let's assume standard localhost:3000 for now.
+        // Initialize Socket
+        const serverUrl = import.meta.env.VITE_SERVER_URL || `http://${window.location.hostname}:3000`;
 
-        // Use environment variable for server URL or fallback but respect hostname logic if needed.
-    // Ideally: if prod, use VITE_SERVER_URL. If dev, use localhost:3000.
-    const serverUrl = import.meta.env.VITE_SERVER_URL || `http://${window.location.hostname}:3000`;
+        socketRef.current = io(serverUrl);
 
-            socketRef.current = io(serverUrl);
+        const socket = socketRef.current;
 
-            const socket = socketRef.current;
+        socket.on('connect', () => {
+            console.log('Connected to signaling server', socket.id);
+            myIdRef.current = socket.id;
+            socket.emit('join-room', { room: roomId, name });
+        });
 
-            socket.on('connect', () => {
-                console.log('Connected to signaling server', socket.id);
-                myIdRef.current = socket.id;
-                socket.emit('join-room', { room: roomId, name });
-            });
+        socket.on('room-users', (userList) => {
+            console.log('Room users updated:', userList);
+            setUsers(userList);
 
-            socket.on('room-users', (userList) => {
-                console.log('Room users updated:', userList);
-                setUsers(userList);
-
-                // Manage connections
-                userList.forEach(user => {
-                    if (user.id === myIdRef.current) return;
-                    if (!peersRef.current[user.id]) {
-                        createPeer(user.id, socket);
-                    }
-                });
-
-                // Cleanup disconnected peers
-                const activeIds = new Set(userList.map(u => u.id));
-                Object.keys(peersRef.current).forEach(id => {
-                    if (!activeIds.has(id)) {
-                        console.log('Removing peer', id);
-                        if (peersRef.current[id]) peersRef.current[id].close();
-                        delete peersRef.current[id];
-                        delete dataChannelsRef.current[id];
-                    }
-                });
-            });
-
-            socket.on('offer', async ({ sender, offer }) => {
-                const pc = peersRef.current[sender];
-                if (pc) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    socket.emit('answer', { target: sender, answer });
-                } else {
-                    // Should not happen if room-users fired first, but possible if race.
-                    // If we receive offer from unknown, create pc?
-                    // Yes, likely we missed room-users update or it's coming.
-                    const newPc = createPeer(sender, socket, false); // false = don't initiate
-                    await newPc.setRemoteDescription(new RTCSessionDescription(offer));
-                    const answer = await newPc.createAnswer();
-                    await newPc.setLocalDescription(answer);
-                    socket.emit('answer', { target: sender, answer });
+            // Manage connections
+            userList.forEach(user => {
+                if (user.id === myIdRef.current) return;
+                if (!peersRef.current[user.id]) {
+                    createPeer(user.id, socket);
                 }
             });
 
-            socket.on('answer', async ({ sender, answer }) => {
-                const pc = peersRef.current[sender];
-                if (pc) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            // Cleanup disconnected peers
+            const activeIds = new Set(userList.map(u => u.id));
+            Object.keys(peersRef.current).forEach(id => {
+                if (!activeIds.has(id)) {
+                    console.log('Removing peer', id);
+                    if (peersRef.current[id]) peersRef.current[id].close();
+                    delete peersRef.current[id];
+                    delete dataChannelsRef.current[id];
                 }
             });
+        });
 
-            socket.on('ice-candidate', async ({ sender, candidate }) => {
-                const pc = peersRef.current[sender];
-                if (pc) {
-                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-                }
-            });
+        socket.on('offer', async ({ sender, offer }) => {
+            const pc = peersRef.current[sender];
+            if (pc) {
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                socket.emit('answer', { target: sender, answer });
+            } else {
+                // Should not happen if room-users fired first, but possible if race.
+                // If we receive offer from unknown, create pc?
+                // Yes, likely we missed room-users update or it's coming.
+                const newPc = createPeer(sender, socket, false); // false = don't initiate
+                await newPc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await newPc.createAnswer();
+                await newPc.setLocalDescription(answer);
+                socket.emit('answer', { target: sender, answer });
+            }
+        });
 
-            return() => {
+        socket.on('answer', async ({ sender, answer }) => {
+            const pc = peersRef.current[sender];
+            if (pc) {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+        });
+
+        socket.on('ice-candidate', async ({ sender, candidate }) => {
+            const pc = peersRef.current[sender];
+            if (pc) {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        });
+
+        return () => {
             socket.disconnect();
             Object.values(peersRef.current).forEach(pc => pc.close());
         };
