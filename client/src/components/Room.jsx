@@ -6,7 +6,7 @@ export default function Room() {
     const { roomId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
-    const name = location.state?.name;
+    const name = location.state?.name || sessionStorage.getItem('username');
 
     const { users, transfers, sendFile } = useWebRTC(roomId, name);
     const [isHere, setIsHere] = useState(false);
