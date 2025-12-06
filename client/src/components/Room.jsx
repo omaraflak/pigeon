@@ -1,5 +1,5 @@
-import { useLocation, useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useCallback, useRef } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
 
 export default function Room() {
@@ -8,13 +8,10 @@ export default function Room() {
     const name = username;
 
     const { users, transfers, sendFile } = useWebRTC(roomId, name);
-    const [isHere, setIsHere] = useState(false);
 
     useEffect(() => {
         if (!name) {
             navigate('/');
-        } else {
-            setIsHere(true);
         }
     }, [name, navigate]);
 
@@ -46,7 +43,7 @@ export default function Room() {
         }
     };
 
-    if (!isHere) return null;
+    if (!name) return null;
 
     return (
         <div className="glass-card" style={{ maxWidth: '1000px', width: '95%' }}>

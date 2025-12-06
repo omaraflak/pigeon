@@ -24,9 +24,103 @@ export function useWebRTC(roomId, name) {
         setTransfers(prev => ({ ...prev, [id]: { ...prev[id], ...data } }));
     };
 
+    const handleDataMessage = useCallback((e, senderId) => {
+        const data = e.data;
+        if (typeof data === 'string') {
+            const metadata = JSON.parse(data);
+            if (metadata.type === 'start') {
+                filesRef.current[metadata.fileId] = {
+                    metadata,
+                    chunks: [],
+                    received: 0
+                };
+                updateTransfer(metadata.fileId, {
+                    type: 'download',
+                    fileName: metadata.fileName,
+                    peerName: 'Peer ' + senderId.substr(0, 4),
+                    progress: 0
+                });
+            } else if (metadata.type === 'end') {
+                // Reassemble
+                const fileData = filesRef.current[metadata.fileId];
+                if (fileData) {
+                    console.log('File Transfer Complete. Reassembling...', {
+                        fileId: metadata.fileId,
+                        chunksCount: fileData.chunks.length,
+                        totalReceived: fileData.received,
+                        expectedSize: fileData.metadata.size,
+                        mimeType: fileData.metadata.fileType
+                    });
+
+                    const blob = new Blob(fileData.chunks, { type: fileData.metadata.fileType || 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+
+                    console.log('Blob created:', { size: blob.size, url });
+
+                    updateTransfer(metadata.fileId, { progress: 100, url, status: 'Completed' });
+                    delete filesRef.current[metadata.fileId]; // Keep metadata/url in transfers state, remove buffer
+                } else {
+                    console.warn('Received END for unknown file:', metadata.fileId);
+                }
+            }
+        } else {
+            // Chunk
+            const activeFileId = Object.keys(filesRef.current).find(id => filesRef.current[id].chunks);
+
+            if (activeFileId) {
+                const fileInfo = filesRef.current[activeFileId];
+                fileInfo.chunks.push(data);
+
+                const chunkSize = data.byteLength || data.size || 0;
+                fileInfo.received += chunkSize;
+
+
+                const progress = Math.round((fileInfo.received / fileInfo.metadata.size) * 100);
+                updateTransfer(activeFileId, { progress });
+            } else {
+                console.warn('Received BINARY chunk but no active file transfer found.', data);
+            }
+        }
+    }, []);
+
+    const setupDataChannel = useCallback((dc, remotePeerId) => {
+        dc.binaryType = 'arraybuffer'; // Handle as ArrayBuffer explicitly
+        dataChannelsRef.current[remotePeerId] = dc;
+        dc.onopen = () => console.log(`Data Channel Open with ${remotePeerId}`);
+        dc.onmessage = (e) => handleDataMessage(e, remotePeerId);
+    }, [handleDataMessage]);
+
+    const createPeer = useCallback((targetId, socket) => {
+        const pc = new RTCPeerConnection(STUN_SERVERS);
+        peersRef.current[targetId] = pc;
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', { target: targetId, candidate: event.candidate });
+            }
+        };
+
+        pc.ondatachannel = (event) => {
+            setupDataChannel(event.channel, targetId);
+        };
+
+        // If I am supposed to offer
+        if (myIdRef.current < targetId) {
+            const dc = pc.createDataChannel("file-transfer");
+            setupDataChannel(dc, targetId);
+
+            pc.createOffer().then(offer => {
+                pc.setLocalDescription(offer);
+                socket.emit('offer', { target: targetId, offer });
+            });
+        }
+
+        return pc;
+    }, [setupDataChannel]);
+
     useEffect(() => {
         // Initialize Socket
-        // Initialize Socket
+
         const serverUrl = import.meta.env.VITE_SERVER_URL || `http://${window.location.hostname}:3000`;
 
         socketRef.current = io(serverUrl);
@@ -98,118 +192,12 @@ export function useWebRTC(roomId, name) {
 
         return () => {
             socket.disconnect();
-            Object.values(peersRef.current).forEach(pc => pc.close());
+            const peers = peersRef.current; // Copy ref for cleanup
+            Object.values(peers).forEach(pc => pc.close());
         };
-    }, [roomId, name]);
+    }, [roomId, name, createPeer]);
 
-    const createPeer = (targetId, socket, shouldInitiate = true) => {
-        // Only initiate if my ID < target ID to avoid glare loop?
-        // Actually, one logic is: whoever is "new" initiates?
-        // But room-users sends full list.
-        // Let's use Lexical ID check for one specific direction, OR just use "Polite Peer" if we had it.
-        // Simple Rule: We create connection object for everyone.
-        // But only CREATE OFFER if myId < targetId.
 
-        // Wait, if I join, I see everyone. I am < or > them.
-        // If I obey the rule, only some offers happen effectively?
-        // No, every pair has one connection relation. One must offer.
-        // If myId < targetId, I offer.
-        // If myId > targetId, I wait for offer.
-        // This covers all pairs exactly once.
-
-        const pc = new RTCPeerConnection(STUN_SERVERS);
-        peersRef.current[targetId] = pc;
-
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('ice-candidate', { target: targetId, candidate: event.candidate });
-            }
-        };
-
-        pc.ondatachannel = (event) => {
-            setupDataChannel(event.channel, targetId);
-        };
-
-        // If I am supposed to offer
-        if (myIdRef.current < targetId) {
-            const dc = pc.createDataChannel("file-transfer");
-            setupDataChannel(dc, targetId);
-
-            pc.createOffer().then(offer => {
-                pc.setLocalDescription(offer);
-                socket.emit('offer', { target: targetId, offer });
-            });
-        }
-
-        return pc;
-    };
-
-    const setupDataChannel = (dc, remotePeerId) => {
-        dc.binaryType = 'arraybuffer'; // Handle as ArrayBuffer explicitly
-        dataChannelsRef.current[remotePeerId] = dc;
-        dc.onopen = () => console.log(`Data Channel Open with ${remotePeerId}`);
-        dc.onmessage = (e) => handleDataMessage(e, remotePeerId);
-    };
-
-    const handleDataMessage = (e, senderId) => {
-        const data = e.data;
-        if (typeof data === 'string') {
-            const metadata = JSON.parse(data);
-            if (metadata.type === 'start') {
-                filesRef.current[metadata.fileId] = {
-                    metadata,
-                    chunks: [],
-                    received: 0
-                };
-                updateTransfer(metadata.fileId, {
-                    type: 'download',
-                    fileName: metadata.fileName,
-                    peerName: 'Peer ' + senderId.substr(0, 4),
-                    progress: 0
-                });
-            } else if (metadata.type === 'end') {
-                // Reassemble
-                const fileData = filesRef.current[metadata.fileId];
-                if (fileData) {
-                    console.log('File Transfer Complete. Reassembling...', {
-                        fileId: metadata.fileId,
-                        chunksCount: fileData.chunks.length,
-                        totalReceived: fileData.received,
-                        expectedSize: fileData.metadata.size,
-                        mimeType: fileData.metadata.fileType
-                    });
-
-                    const blob = new Blob(fileData.chunks, { type: fileData.metadata.fileType || 'application/octet-stream' });
-                    const url = URL.createObjectURL(blob);
-
-                    console.log('Blob created:', { size: blob.size, url });
-
-                    updateTransfer(metadata.fileId, { progress: 100, url, status: 'Completed' });
-                    delete filesRef.current[metadata.fileId]; // Keep metadata/url in transfers state, remove buffer
-                } else {
-                    console.warn('Received END for unknown file:', metadata.fileId);
-                }
-            }
-        } else {
-            // Chunk
-            const activeFileId = Object.keys(filesRef.current).find(id => filesRef.current[id].chunks);
-
-            if (activeFileId) {
-                const fileInfo = filesRef.current[activeFileId];
-                fileInfo.chunks.push(data);
-
-                const chunkSize = data.byteLength || data.size || 0;
-                fileInfo.received += chunkSize;
-
-                // console.log(`Received chunk for ${activeFileId}: ${chunkSize} bytes. Total: ${fileInfo.received}/${fileInfo.metadata.size}`);
-
-                const progress = Math.round((fileInfo.received / fileInfo.metadata.size) * 100);
-                updateTransfer(activeFileId, { progress });
-            } else {
-                console.warn('Received BINARY chunk but no active file transfer found.', data);
-            }
-        }
-    };
 
     const sendFile = (file) => {
         const fileId = Math.random().toString(36).substr(2, 9);

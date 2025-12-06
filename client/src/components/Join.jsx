@@ -9,10 +9,7 @@ export default function Join() {
     const handleJoin = (e) => {
         e.preventDefault();
         if (name.trim() && room.trim()) {
-            // Pass name via state or query param, or store in context. 
-            // For simplicity, we'll suggest passing it via query param or simple navigation
-            // But URL might look cleaner if we just store it in local storage or pass in state.
-            // Let's pass it in navigation state.
+            // Navigate to room with username in URL
             navigate(`/user/${name}/room/${room}`);
         }
     };
