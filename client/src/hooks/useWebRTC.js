@@ -12,6 +12,7 @@ const CHUNK_SIZE = 16 * 1024; // 16KB
 
 export function useWebRTC(roomId, name) {
     const [users, setUsers] = useState([]); // List of users in room
+    const usersRef = useRef([]); // Ref to access users in callbacks
     const [transfers, setTransfers] = useState({}); // { [fileId]: { type: 'upload'|'download', progress, fileName, peerName } }
 
     const socketRef = useRef();
@@ -34,10 +35,13 @@ export function useWebRTC(roomId, name) {
                     chunks: [],
                     received: 0
                 };
+                const peerNode = usersRef.current.find(u => u.id === senderId);
+                const peerName = peerNode ? peerNode.name : 'Peer ' + senderId.substr(0, 4);
+
                 updateTransfer(metadata.fileId, {
                     type: 'download',
                     fileName: metadata.fileName,
-                    peerName: 'Peer ' + senderId.substr(0, 4),
+                    peerName: peerName,
                     progress: 0
                 });
             } else if (metadata.type === 'end') {
@@ -136,6 +140,7 @@ export function useWebRTC(roomId, name) {
         socket.on('room-users', (userList) => {
             console.log('Room users updated:', userList);
             setUsers(userList);
+            usersRef.current = userList;
 
             // Manage connections
             userList.forEach(user => {

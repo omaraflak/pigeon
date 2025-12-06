@@ -149,13 +149,13 @@ export default function Room() {
                                             download={transfer.fileName}
                                             className="download-btn"
                                             style={{
-                                                color: 'var(--bg-color)',
-                                                textDecoration: 'none',
-                                                background: 'var(--accent-color)',
-                                                padding: '4px 12px',
-                                                borderRadius: '4px',
+                                                color: 'var(--accent-color)',
+                                                textDecoration: 'underline',
+                                                background: 'transparent',
+                                                padding: '4px 0',
                                                 fontWeight: 'bold',
-                                                display: 'inline-block'
+                                                display: 'inline-block',
+                                                cursor: 'pointer'
                                             }}
                                         >
                                             Save to Disk
