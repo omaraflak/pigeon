@@ -265,6 +265,7 @@ export function useWebRTC(roomId, name) {
                     if (offset < file.size) {
                         readSlice(offset);
                     } else {
+                        updateTransfer(fileId + peerId, { progress: 100, status: 'Completed' });
                         dc.send(JSON.stringify({ type: 'end', fileId }));
                     }
                 };

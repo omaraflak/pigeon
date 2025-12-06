@@ -144,7 +144,9 @@ export default function Room() {
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '0.8rem' }}>
                                     <span>{transfer.progress}%</span>
-                                    {transfer.url ? (
+                                    {transfer.status === 'Completed' && transfer.type === 'upload' ? (
+                                        <span style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>Uploaded!</span>
+                                    ) : transfer.url ? (
                                         <a
                                             href={transfer.url}
                                             download={transfer.fileName}
