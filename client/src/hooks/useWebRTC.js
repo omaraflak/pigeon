@@ -217,10 +217,13 @@ export function useWebRTC(roomId, name) {
         // Broadcast to all connected data channels
         Object.entries(dataChannelsRef.current).forEach(([peerId, dc]) => {
             if (dc.readyState === 'open') {
+                const peerNode = usersRef.current.find(u => u.id === peerId);
+                const peerName = peerNode ? peerNode.name : 'Peer ' + peerId.substr(0, 4);
+
                 updateTransfer(fileId + peerId, { // Unique transfer ID per peer
                     type: 'upload',
                     fileName: file.name,
-                    peerName: 'Peer ' + peerId.substr(0, 4),
+                    peerName: peerName,
                     progress: 0
                 });
 
