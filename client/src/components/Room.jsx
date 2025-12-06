@@ -124,7 +124,7 @@ export default function Room() {
                                         {transfer.type === 'upload' ? '⬆️' : '⬇️'} {transfer.fileName}
                                     </span>
                                     <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>
-                                        {transfer.peerName}
+                                        {transfer.type === 'upload' ? `To: ${transfer.peerName}` : `From: ${transfer.peerName}`}
                                     </span>
                                 </div>
 
