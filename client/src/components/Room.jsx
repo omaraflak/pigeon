@@ -145,10 +145,14 @@ export default function Room() {
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '0.8rem' }}>
                                     <span>{transfer.progress}%</span>
-                                    {transfer.url && (
+                                    {transfer.status === 'Completed' ? (
+                                        <span style={{ color: 'var(--accent-color)' }}>Check your Downloads folder</span>
+                                    ) : transfer.url ? (
                                         <a href={transfer.url} download={transfer.fileName} style={{ color: 'var(--accent-color)', textDecoration: 'none' }}>
                                             Download
                                         </a>
+                                    ) : (
+                                        <span>{transfer.type === 'upload' ? 'Uploading...' : 'Downloading...'}</span>
                                     )}
                                 </div>
                             </div>
