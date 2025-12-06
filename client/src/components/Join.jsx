@@ -13,8 +13,7 @@ export default function Join() {
             // For simplicity, we'll suggest passing it via query param or simple navigation
             // But URL might look cleaner if we just store it in local storage or pass in state.
             // Let's pass it in navigation state.
-            sessionStorage.setItem('username', name);
-            navigate(`/room/${room}`, { state: { name } });
+            navigate(`/user/${name}/room/${room}`);
         }
     };
 

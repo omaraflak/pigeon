@@ -3,10 +3,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
 
 export default function Room() {
-    const { roomId } = useParams();
-    const location = useLocation();
+    const { roomId, username } = useParams();
     const navigate = useNavigate();
-    const name = location.state?.name || sessionStorage.getItem('username');
+    const name = username;
 
     const { users, transfers, sendFile } = useWebRTC(roomId, name);
     const [isHere, setIsHere] = useState(false);

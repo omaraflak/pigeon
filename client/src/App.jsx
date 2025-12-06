@@ -9,7 +9,7 @@ function App() {
       <div className="app-container">
         <Routes>
           <Route path="/" element={<Join />} />
-          <Route path="/room/:roomId" element={<Room />} />
+          <Route path="/user/:username/room/:roomId" element={<Room />} />
         </Routes>
       </div>
     </Router>
