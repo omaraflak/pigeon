@@ -13,9 +13,9 @@ export default function Room() {
 
     useEffect(() => {
         if (!name) {
-            navigate('/');
+            navigate(`/?room=${roomId}`);
         }
-    }, [name, navigate]);
+    }, [name, navigate, roomId]);
 
     /* Create a ref for the file input */
     const fileInputRef = useRef(null);
@@ -57,9 +57,8 @@ export default function Room() {
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button
                         onClick={() => {
-                            const url = new URL(window.location.href);
-                            url.searchParams.delete('user');
-                            navigator.clipboard.writeText(url.toString());
+                            const shareLink = `${window.location.origin}/?room=${roomId}`;
+                            navigator.clipboard.writeText(shareLink);
                             setCopied(true);
                             setTimeout(() => setCopied(false), 1000);
                         }}

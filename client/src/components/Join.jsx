@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Join() {
+    const [searchParams] = useSearchParams();
     const [name, setName] = useState('');
-    const [room, setRoom] = useState('');
+    const [room, setRoom] = useState(searchParams.get('room') || '');
     const navigate = useNavigate();
 
     const handleJoin = (e) => {
