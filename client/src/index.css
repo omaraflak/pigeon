@@ -36,7 +36,16 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
+}
+
+.main-content {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
+  align-items: center;
 }
 
 /* Glassmorphism Card */
@@ -141,4 +150,27 @@ h3 {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 2rem;
+}
+
+/* Footer */
+.footer {
+  margin-top: auto;
+  padding: 1rem;
+  text-align: center;
+  width: 100%;
+}
+
+.footer a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.footer a:hover {
+  color: var(--accent-color);
 }
