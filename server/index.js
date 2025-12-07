@@ -20,10 +20,10 @@ const users = new Map();
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join-room', ({ room, name }) => {
+    socket.on('join-room', ({ room, name, publicKey }) => {
         socket.join(room);
-        users.set(socket.id, { room, name });
-        console.log(`User ${name} (${socket.id}) joined room ${room}`);
+        users.set(socket.id, { room, name, publicKey });
+        console.log(`User ${name} (${socket.id}) joined room ${room} with key`);
 
         // Broadcast list of users in the room to everyone in the room
         const roomUsers = getRoomUsers(room);
@@ -59,7 +59,7 @@ function getRoomUsers(room) {
     const roomUsers = [];
     users.forEach((user, id) => {
         if (user.room === room) {
-            roomUsers.push({ id, name: user.name });
+            roomUsers.push({ id, name: user.name, publicKey: user.publicKey });
         }
     });
     return roomUsers;

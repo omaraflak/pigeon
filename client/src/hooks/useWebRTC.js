@@ -21,6 +21,27 @@ export function useWebRTC(roomId, name) {
     const myIdRef = useRef();
     const filesRef = useRef({}); // Receiving files buffer: { [fileId]: { chunks: [], metadata: {} } }
 
+    // Crypto Refs
+    const keyPairRef = useRef(null); // My ECDH Key Pair
+    const sharedKeysRef = useRef({}); // { [peerId]: CryptoKey (AES-GCM) }
+
+    // Generate keys on mount
+    useEffect(() => {
+        const generateKeys = async () => {
+            const keyPair = await window.crypto.subtle.generateKey(
+                {
+                    name: "ECDH",
+                    namedCurve: "P-256"
+                },
+                true,
+                ["deriveKey"]
+            );
+            keyPairRef.current = keyPair;
+            console.log("Generated ECDH Key Pair");
+        };
+        generateKeys();
+    }, []);
+
     const updateTransfer = (id, data) => {
         setTransfers(prev => ({ ...prev, [id]: { ...prev[id], ...data } }));
     };
@@ -68,22 +89,49 @@ export function useWebRTC(roomId, name) {
                 }
             }
         } else {
-            // Chunk
-            const activeFileId = Object.keys(filesRef.current).find(id => filesRef.current[id].chunks);
+            // Chunk - Encrypted
+            // Structure: [IV (12 bytes)] [Ciphertext]
+            const handleChunk = async () => {
+                const activeFileId = Object.keys(filesRef.current).find(id => filesRef.current[id].chunks);
 
-            if (activeFileId) {
-                const fileInfo = filesRef.current[activeFileId];
-                fileInfo.chunks.push(data);
+                if (activeFileId) {
+                    const fileInfo = filesRef.current[activeFileId];
+                    const sharedKey = sharedKeysRef.current[senderId];
 
-                const chunkSize = data.byteLength || data.size || 0;
-                fileInfo.received += chunkSize;
+                    if (!sharedKey) {
+                        console.error("No shared key for sender", senderId);
+                        return;
+                    }
 
+                    try {
+                        const encryptedData = data; // ArrayBuffer
+                        const iv = encryptedData.slice(0, 12);
+                        const ciphertext = encryptedData.slice(12);
 
-                const progress = Math.round((fileInfo.received / fileInfo.metadata.size) * 100);
-                updateTransfer(activeFileId, { progress });
-            } else {
-                console.warn('Received BINARY chunk but no active file transfer found.', data);
-            }
+                        const decryptedChunk = await window.crypto.subtle.decrypt(
+                            {
+                                name: "AES-GCM",
+                                iv: iv
+                            },
+                            sharedKey,
+                            ciphertext
+                        );
+
+                        fileInfo.chunks.push(decryptedChunk);
+
+                        const chunkSize = decryptedChunk.byteLength || decryptedChunk.size || 0;
+                        fileInfo.received += chunkSize;
+
+                        const progress = Math.round((fileInfo.received / fileInfo.metadata.size) * 100);
+                        updateTransfer(activeFileId, { progress });
+                    } catch (err) {
+                        console.error("Decryption failed", err);
+                    }
+                } else {
+                    console.warn('Received BINARY chunk but no active file transfer found.', data);
+                }
+            };
+            handleChunk();
         }
     }, []);
 
@@ -131,16 +179,69 @@ export function useWebRTC(roomId, name) {
 
         const socket = socketRef.current;
 
-        socket.on('connect', () => {
+        socket.on('connect', async () => {
             console.log('Connected to signaling server', socket.id);
             myIdRef.current = socket.id;
-            socket.emit('join-room', { room: roomId, name });
+
+            // Wait for key generation if not ready (rare race condition)
+            while (!keyPairRef.current) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // Export my public key
+            const exportedKey = await window.crypto.subtle.exportKey(
+                "jwk",
+                keyPairRef.current.publicKey
+            );
+
+            socket.emit('join-room', { room: roomId, name, publicKey: exportedKey });
         });
 
-        socket.on('room-users', (userList) => {
+        socket.on('room-users', async (userList) => {
             console.log('Room users updated:', userList);
             setUsers(userList);
             usersRef.current = userList;
+
+            // Compute shared secrets for new peers
+            for (const user of userList) {
+                if (user.id === myIdRef.current) continue;
+                if (!sharedKeysRef.current[user.id] && user.publicKey) {
+                    try {
+                        // Import peer public key
+                        const peerKey = await window.crypto.subtle.importKey(
+                            "jwk",
+                            user.publicKey,
+                            {
+                                name: "ECDH",
+                                namedCurve: "P-256"
+                            },
+                            true,
+                            []
+                        );
+
+                        // Derive shared secret
+                        const sharedSecret = await window.crypto.subtle.deriveKey(
+                            {
+                                name: "ECDH",
+                                public: peerKey
+                            },
+                            keyPairRef.current.privateKey,
+                            {
+                                name: "AES-GCM",
+                                length: 256
+                            },
+                            true,
+                            ["encrypt", "decrypt"]
+                        );
+
+                        sharedKeysRef.current[user.id] = sharedSecret;
+                        console.log("Derived shared key with", user.name);
+
+                    } catch (err) {
+                        console.error("Failed to derive shared key with", user.name, err);
+                    }
+                }
+            }
 
             // Manage connections
             userList.forEach(user => {
@@ -250,8 +351,30 @@ export function useWebRTC(roomId, name) {
                     }
                 };
 
-                const sendChunk = (data) => {
-                    dc.send(data);
+                const sendChunk = async (data) => {
+                    // Encrypt Chunk
+                    const sharedKey = sharedKeysRef.current[peerId];
+                    if (!sharedKey) {
+                        console.error("Missing shared key for", peerId);
+                        return;
+                    }
+
+                    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                    const encryptedData = await window.crypto.subtle.encrypt(
+                        {
+                            name: "AES-GCM",
+                            iv: iv
+                        },
+                        sharedKey,
+                        data
+                    );
+
+                    // Prepend IV to encrypted data
+                    const payload = new Uint8Array(iv.byteLength + encryptedData.byteLength);
+                    payload.set(iv, 0);
+                    payload.set(new Uint8Array(encryptedData), iv.byteLength);
+
+                    dc.send(payload);
                     offset += data.byteLength;
 
                     updateTransfer(fileId + peerId, {
