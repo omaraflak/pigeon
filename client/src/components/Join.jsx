@@ -10,7 +10,7 @@ export default function Join() {
         e.preventDefault();
         if (name.trim() && room.trim()) {
             // Navigate to room with username in URL
-            navigate(`/user/${name}/room/${room}`);
+            navigate(`/room/${room}?user=${name}`);
         }
     };
 

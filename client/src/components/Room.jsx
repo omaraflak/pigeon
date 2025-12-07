@@ -1,11 +1,12 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
 
 export default function Room() {
-    const { roomId, username } = useParams();
+    const { roomId } = useParams();
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const name = username;
+    const name = searchParams.get('user');
     const [copied, setCopied] = useState(false);
 
     const { users, transfers, sendFile } = useWebRTC(roomId, name);
@@ -56,7 +57,9 @@ export default function Room() {
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button
                         onClick={() => {
-                            navigator.clipboard.writeText(window.location.href);
+                            const url = new URL(window.location.href);
+                            url.searchParams.delete('user');
+                            navigator.clipboard.writeText(url.toString());
                             setCopied(true);
                             setTimeout(() => setCopied(false), 1000);
                         }}
