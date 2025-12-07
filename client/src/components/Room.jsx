@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
 
 export default function Room() {
     const { roomId, username } = useParams();
     const navigate = useNavigate();
     const name = username;
+    const [copied, setCopied] = useState(false);
 
     const { users, transfers, sendFile } = useWebRTC(roomId, name);
 
@@ -46,19 +47,46 @@ export default function Room() {
     if (!name) return null;
 
     return (
-        <div className="glass-card" style={{ maxWidth: '1000px', width: '95%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2>Room: <span style={{ color: 'var(--accent-color)' }}>{roomId}</span></h2>
-                <span className="badge">{name} (You)</span>
+        <div className="glass-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Room:</span>
+                    <span style={{ color: 'var(--accent-color)', fontSize: '1rem', lineHeight: 1 }}>{roomId}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <button
+                        onClick={() => {
+                            navigator.clipboard.writeText(window.location.href);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1000);
+                        }}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            background: copied ? 'var(--accent-color)' : 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '20px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            color: copied ? '#000' : 'var(--text-primary)',
+                            transition: 'all 0.3s ease',
+                            transform: copied ? 'scale(1.05)' : 'scale(1)',
+                            fontWeight: copied ? 'bold' : 'normal',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                        }}
+                    >
+                        {copied ? '✅' : '🔗'}<span></span>{copied ? 'Copied!' : 'Share Link'}
+                    </button>
+                </div>
             </div>
 
             <div className="room-grid">
-                {/* Left Column: Peers */}
                 <div className="peers-panel">
-                    <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>Peers ({users.length - 1})</h3>
+                    <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>Peers ({users.length})</h3>
 
                     <div className="peers-list" style={{ marginTop: '1rem' }}>
-                        {users.filter(u => u.name !== name).map(user => (
+                        {users.map(user => (
                             <div key={user.id} className="peer-item" style={{
                                 padding: '0.8rem',
                                 marginBottom: '0.5rem',
@@ -72,19 +100,12 @@ export default function Room() {
                                     borderRadius: '50%', background: '#00ecbc',
                                     marginRight: '10px'
                                 }}></div>
-                                {user.name}
+                                {name == user.name ? user.name + ' (You)' : user.name}
                             </div>
                         ))}
-
-                        {users.length <= 1 && (
-                            <div style={{ fontStyle: 'italic', color: 'var(--text-secondary)', padding: '1rem' }}>
-                                Waiting for others to join...
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                {/* Right Column: File Transfer */}
                 <div className="transfer-panel">
                     <input
                         type="file"
