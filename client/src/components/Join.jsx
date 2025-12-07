@@ -10,14 +10,13 @@ export default function Join() {
     const handleJoin = (e) => {
         e.preventDefault();
         if (name.trim() && room.trim()) {
-            // Navigate to room with username in URL
             navigate(`/room/${room}?user=${name}`);
         }
     };
 
     return (
         <div className="glass-card">
-            <h1 className="title">Filesharing P2P</h1>
+            <h1 className="title">Peer-to-Peer File Sharing</h1>
             <form onSubmit={handleJoin}>
                 <input
                     type="text"
