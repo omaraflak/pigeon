@@ -3,7 +3,8 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
 
 export default function Room() {
-    const { roomId } = useParams();
+    const params = useParams();
+    const roomId = params.roomId.toLowerCase();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const name = searchParams.get('user');

@@ -29,7 +29,7 @@ export default function Join() {
                     type="text"
                     placeholder="Room Code"
                     value={room}
-                    onChange={(e) => setRoom(e.target.value)}
+                    onChange={(e) => setRoom(e.target.value.toLowerCase())}
                     required
                 />
                 <button type="submit">Join Room</button>

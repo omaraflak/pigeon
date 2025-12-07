@@ -21,6 +21,7 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     socket.on('join-room', ({ room, name, publicKey }) => {
+        room = room.toLowerCase();
         socket.join(room);
         users.set(socket.id, { room, name, publicKey });
         console.log(`User ${name} (${socket.id}) joined room ${room} with key`);
