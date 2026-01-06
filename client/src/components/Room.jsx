@@ -10,7 +10,7 @@ export default function Room() {
     const name = searchParams.get('user');
     const [copied, setCopied] = useState(false);
 
-    const { users, transfers, sendFile } = useWebRTC(roomId, name);
+    const { users, transfers, sendFile, connectionStatus } = useWebRTC(roomId, name);
 
     useEffect(() => {
         if (!name) {
@@ -51,9 +51,24 @@ export default function Room() {
     return (
         <div className="glass-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Room:</span>
-                    <span style={{ color: 'var(--accent-color)', fontSize: '1rem', lineHeight: 1 }}>{roomId}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Room:</span>
+                        <span style={{ color: 'var(--accent-color)', fontSize: '1rem', lineHeight: 1 }}>{roomId}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                        <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: connectionStatus === 'connected' ? '#00ecbc' : '#ffd700',
+                            animation: connectionStatus === 'connected' ? 'none' : 'pulse 1.5s ease-in-out infinite',
+                            boxShadow: connectionStatus === 'connected' ? '0 0 8px #00ecbc' : '0 0 8px #ffd700'
+                        }}></div>
+                        <span style={{ color: connectionStatus === 'connected' ? '#00ecbc' : '#ffd700' }}>
+                            {connectionStatus === 'connected' ? 'Connected' : 'Connecting to server...'}
+                        </span>
+                    </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button

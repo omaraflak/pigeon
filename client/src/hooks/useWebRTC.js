@@ -14,6 +14,7 @@ export function useWebRTC(roomId, name) {
     const [users, setUsers] = useState([]); // List of users in room
     const usersRef = useRef([]); // Ref to access users in callbacks
     const [transfers, setTransfers] = useState({}); // { [fileId]: { type: 'upload'|'download', progress, fileName, peerName } }
+    const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected'
 
     const socketRef = useRef();
     const peersRef = useRef({}); // { [socketId]: RTCPeerConnection }
@@ -195,6 +196,7 @@ export function useWebRTC(roomId, name) {
             );
 
             socket.emit('join-room', { room: roomId, name, publicKey: exportedKey });
+            setConnectionStatus('connected');
         });
 
         socket.on('room-users', async (userList) => {
@@ -399,5 +401,5 @@ export function useWebRTC(roomId, name) {
         });
     };
 
-    return { users, transfers, sendFile };
+    return { users, transfers, sendFile, connectionStatus };
 }
